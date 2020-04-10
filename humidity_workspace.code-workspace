@@ -1,0 +1,58 @@
+{
+	"folders": [
+		{
+			"path": "humidity"
+		},
+		{
+			"path": "humidity_control"
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"array": "cpp",
+			"deque": "cpp",
+			"list": "cpp",
+			"string": "cpp",
+			"unordered_map": "cpp",
+			"vector": "cpp",
+			"initializer_list": "cpp",
+			"*.tcc": "cpp",
+			"memory": "cpp",
+			"fstream": "cpp",
+			"streambuf": "cpp",
+			"tuple": "cpp",
+			"algorithm": "cpp",
+			"cctype": "cpp",
+			"cerrno": "cpp",
+			"cfloat": "cpp",
+			"climits": "cpp",
+			"clocale": "cpp",
+			"cmath": "cpp",
+			"cstdarg": "cpp",
+			"cstddef": "cpp",
+			"cstdio": "cpp",
+			"cstdlib": "cpp",
+			"cstring": "cpp",
+			"ctime": "cpp",
+			"cwchar": "cpp",
+			"cwctype": "cpp",
+			"exception": "cpp",
+			"functional": "cpp",
+			"numeric": "cpp",
+			"random": "cpp",
+			"iosfwd": "cpp",
+			"iostream": "cpp",
+			"istream": "cpp",
+			"limits": "cpp",
+			"map": "cpp",
+			"new": "cpp",
+			"ostream": "cpp",
+			"queue": "cpp",
+			"ratio": "cpp",
+			"sstream": "cpp",
+			"type_traits": "cpp",
+			"typeinfo": "cpp",
+			"utility": "cpp"
+		}
+	}
+}
