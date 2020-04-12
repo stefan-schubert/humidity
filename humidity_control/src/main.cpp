@@ -30,11 +30,14 @@
 #define BLUE 0x5E1B
 
 // constants
-const unsigned int MAX_HUMIDITY = 7000;          // 70.00%
+const unsigned int MAX_HUMIDITY = 70;            // 70.00%
+const unsigned int WARN_HUMIDITY = 50;           // 50.00 %
 const unsigned long MAX_AGE = 10000;             // 10s
 const unsigned long DEBOUNCE = 20;               // 20ms
 const unsigned long MAX_DISPLAY_ACTIVE = 600000; // 10min
 const uint8_t MAX_WIRES = 3;                     // max 3 sensor pairs
+const unsigned int WARN_ANGLE = 110 + 320 * ((float)WARN_HUMIDITY / 100.0f);
+const unsigned int ERROR_ANGLE = 110 + 320 * ((float)MAX_HUMIDITY / 100.0f);
 
 // display
 Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
@@ -151,29 +154,29 @@ void drawGauge(uint16_t x, uint16_t y, sensor *sensor, cache_entry *cache)
   if (cache->fresh || force_update || (h != cache->humidity && value_available))
   {
     uint16_t degrees = round(h * 3.2) + 110;
-    if (h > 0 && h <= 50)
+    if (h > 0 && h <= WARN_HUMIDITY)
     {
       drawArc(x, y, 110, degrees, 26, 4, GREEN);
     }
-    else if (h > 50 && h <= 70)
+    else if (h > WARN_HUMIDITY && h <= MAX_HUMIDITY)
     {
-      drawArc(x, y, 110, 270, 26, 4, GREEN);
-      drawArc(x, y, 271, degrees, 26, 4, YELLOW);
+      drawArc(x, y, 110, WARN_ANGLE, 26, 4, GREEN);
+      drawArc(x, y, WARN_ANGLE + 1, degrees, 26, 4, YELLOW);
     }
-    else if (h > 70)
+    else if (h > MAX_HUMIDITY)
     {
-      drawArc(x, y, 110, 270, 26, 4, GREEN);
-      drawArc(x, y, 271, 334, 26, 4, YELLOW);
-      drawArc(x, y, 335, degrees, 26, 4, RED);
+      drawArc(x, y, 110, WARN_ANGLE, 26, 4, GREEN);
+      drawArc(x, y, WARN_ANGLE + 1, ERROR_ANGLE, 26, 4, YELLOW);
+      drawArc(x, y, ERROR_ANGLE + 1, degrees, 26, 4, RED);
     }
     drawArc(x, y, degrees + (degrees > 0 && degrees < 430 ? 1 : 0), 430, 26, 4, ST7735_BLACK);
-    drawArc(x, y, 334, 334, 25, 7, ST7735_WHITE);
+    drawArc(x, y, ERROR_ANGLE, ERROR_ANGLE, 25, 7, ST7735_WHITE);
   }
   // reset gauge
   if (force_reset)
   {
     drawArc(x, y, 110, 430, 26, 4, ST7735_BLACK);
-    drawArc(x, y, 334, 334, 25, 7, ST7735_WHITE);
+    drawArc(x, y, ERROR_ANGLE, ERROR_ANGLE, 25, 7, ST7735_WHITE);
   }
 
   // draw temperature
@@ -291,26 +294,28 @@ void checkStatusAndDrawValues(sensor_record record)
       max_humidity = record.sensors[i].humidity;
     }
   }
-  if (max_humidity > 7000 && !error_active)
+  if (max_humidity > MAX_HUMIDITY * 100 && !error_active)
   {
+#ifdef DEBUG
     Serial.println("Humidity to high: Turn on the buzzer!");
+#endif
     toggleDisplay(true);
     error_active = true;
     buzzer_active = true;
     tone(BUZZER_PIN, 1480.0);
     drawStatus(96, 32, ERROR, &last_status);
   }
-  else if (max_humidity > 5000 && max_humidity <= 7000)
+  else if (max_humidity > WARN_HUMIDITY * 100 && max_humidity <= MAX_HUMIDITY * 100)
   {
     noTone(BUZZER_PIN);
     drawStatus(96, 32, WARN, &last_status);
   }
-  else if (max_humidity > 0 && max_humidity <= 5000)
+  else if (max_humidity > 0 && max_humidity <= WARN_HUMIDITY * 100)
   {
     noTone(BUZZER_PIN);
     drawStatus(96, 32, NORMAL, &last_status);
   }
-  if (error_active && max_humidity <= 7000)
+  if (error_active && max_humidity <= MAX_HUMIDITY * 100)
   {
     error_active = false;
   }
@@ -325,6 +330,7 @@ void checkStatusAndDrawValues(sensor_record record)
 void payloadHandler(uint8_t *payload, uint16_t length, const PJON_Packet_Info &packet_info)
 {
   memcpy(&record, payload, sizeof(record));
+  // handler data
   checkStatusAndDrawValues(record);
 #ifdef DEBUG
   for (uint8_t i = 0; i < MAX_WIRES; i++)
@@ -342,12 +348,17 @@ void errorHandler(uint8_t code, uint16_t data, void *custom_pointer)
   if (code == PJON_CONNECTION_LOST)
   {
     digitalWrite(LED_BUILTIN, HIGH);
+#ifdef DEBUG
     Serial.println("Error!");
+#endif
   }
 }
 
 /**
- * Button interupt handler.
+ * Button interupt handler. 
+ * 
+ * Turns on display, if display is off and now error is present.
+ * If error is present, button pressed deactivates buzzer.
  */
 void ICACHE_RAM_ATTR buttonPress()
 {
@@ -371,44 +382,66 @@ void ICACHE_RAM_ATTR buttonPress()
   }
 }
 
+/**
+ * Setup system.
+ */
 void setup()
 {
   delay(2000);
+#ifdef DEBUG
   Serial.begin(9600);
+#endif
 
+  // setup TFT backlight pin
   pinMode(TFT_LED, OUTPUT);
   digitalWrite(TFT_LED, HIGH);
 
+  // init TFT
   tft.initR(INITR_144GREENTAB);
+  // use u8g2
   u8g2.begin(tft);
   u8g2.setForegroundColor(ST7735_WHITE);
   tft.setRotation(tft.getRotation() + 1);
   tft.fillScreen(ST7735_BLACK);
 
+  // draw status and gauges
   drawStatus(96, 32, NONE, &last_status);
   drawGauge(32, 32, &record.sensors[0], &cache_instance.entries[0]);
   drawGauge(32, 96, &record.sensors[0], &cache_instance.entries[1]);
   drawGauge(96, 96, &record.sensors[0], &cache_instance.entries[2]);
 
+  // start software serial port
   port.begin(9600, SWSERIAL_8N1, RX_PIN, TX_PIN, false, 256);
 
+  // setup PJON
   bus.strategy.set_serial(&port);
+  // set handlers
   bus.set_error(errorHandler);
   bus.set_receiver(payloadHandler);
+  // start bus
   bus.begin();
 
+  // setup button pin
   pinMode(BUTTON_PIN, INPUT_PULLUP);
+  // connect to interrupt
   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonPress, CHANGE);
 
+#ifdef DEBUG
   Serial.println("Init complete!");
+#endif
 }
 
+/**
+ * Event loop.
+ */
 void loop()
 {
+  // trigger PJON handlers
   bus.update();
   bus.receive();
 
   unsigned long current_millis = millis();
+  // turn on display and show cleared status if no new data has been received
   if (!data_cleared && (current_millis - last_time_payload_recieved) > MAX_AGE)
   {
     toggleDisplay(true);
@@ -423,6 +456,8 @@ void loop()
     drawGauge(96, 96, &record.sensors[2], &cache_instance.entries[2]);
     data_cleared = true;
   }
+
+  // turn off backlight if no error is present, backlight is on and display timeout is reached
   if (!error_active && display_active && (current_millis - last_time_display_active) > MAX_DISPLAY_ACTIVE)
   {
     toggleDisplay(false);
