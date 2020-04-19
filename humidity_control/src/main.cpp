@@ -13,7 +13,7 @@
 #include <config.h>
 
 // DEBUG flag
-#define DEBUG
+// #define DEBUG
 
 // pin config
 #define RX_PIN D1
@@ -36,6 +36,7 @@
 const unsigned int MAX_HUMIDITY = 70;            // 70.00%
 const unsigned int WARN_HUMIDITY = 50;           // 50.00 %
 const unsigned long MAX_AGE = 10000;             // 10s
+const unsigned long MAX_AGE_CLOUD = 15000;       // 15s
 const unsigned long DEBOUNCE = 20;               // 20ms
 const unsigned long MAX_DISPLAY_ACTIVE = 600000; // 10min
 const uint8_t MAX_WIRES = 3;                     // max 3 sensor pairs
@@ -89,6 +90,7 @@ struct cache
 unsigned long last_time_button_pressed = millis();
 unsigned long last_time_payload_recieved = millis();
 unsigned long last_time_display_active = millis();
+unsigned long last_time_data_submitted = millis();
 // falgs
 volatile bool data_cleared = false;
 volatile bool buttonPressed = false;
@@ -337,13 +339,18 @@ void checkStatusAndDrawValues(sensor_record *record)
  */
 void submitValues(sensor_record *record)
 {
-  ubidots.add("humidity_0", record->sensors[0].humidity / 100.0);
-  ubidots.add("temperature_0", record->sensors[0].temperature / 100.0);
-  ubidots.add("humidity_1", record->sensors[1].humidity / 100.0);
-  ubidots.add("temperature_1", record->sensors[1].temperature / 100.0);
-  ubidots.add("humidity_2", record->sensors[2].humidity / 100.0);
-  ubidots.add("temperature_2", record->sensors[2].temperature / 100.0);
-  ubidots.send((char *)LABEL);
+  long current_millis = millis();
+  if ((current_millis - last_time_data_submitted) > MAX_AGE_CLOUD)
+  {
+    last_time_data_submitted = current_millis;
+    ubidots.add("humidity_0", record->sensors[0].humidity / 100.0);
+    ubidots.add("temperature_0", record->sensors[0].temperature / 100.0);
+    ubidots.add("humidity_1", record->sensors[1].humidity / 100.0);
+    ubidots.add("temperature_1", record->sensors[1].temperature / 100.0);
+    ubidots.add("humidity_2", record->sensors[2].humidity / 100.0);
+    ubidots.add("temperature_2", record->sensors[2].temperature / 100.0);
+    ubidots.send((char *)LABEL);
+  }
 }
 
 /**
