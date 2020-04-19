@@ -468,15 +468,15 @@ void setup()
   while (WiFi.status() == WL_DISCONNECTED && count < 10)
   {
     delay(1000);
-    tft.drawRect(count * 4, 0, 2, 2, ST7735_WHITE);
+    tft.fillRect(count * 4, 0, 2, 2, ST7735_WHITE);
     count++;
   }
   // reset count
-  tft.drawLine(0, 0, 18, 0, ST7735_BLACK);
+  tft.fillRect(0, 0, 18, 2, ST7735_BLACK);
 
   if (WiFi.status() == WL_CONNECTED)
   {
-    tft.drawRect(0, 0, 4, 4, GREEN);
+    tft.fillRect(0, 0, 4, 4, GREEN);
   }
   else
   {
@@ -484,11 +484,11 @@ void setup()
     // start wps
     if (WiFi.beginWPSConfig() && WiFi.SSID().length() > 0)
     {
-      tft.drawRect(0, 0, 4, 4, GREEN);
+      tft.fillRect(0, 0, 4, 4, GREEN);
     }
     else
     {
-      tft.drawRect(0, 0, 4, 4, RED);
+      tft.fillRect(0, 0, 4, 4, RED);
 #ifdef DEBUG
       Serial.println("WPS failed!");
 #endif
