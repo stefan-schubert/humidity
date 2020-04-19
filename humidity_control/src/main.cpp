@@ -1,6 +1,7 @@
 #define PJON_PACKET_MAX_LENGTH 100
 
 #include <Arduino.h>
+#include <ESP8266WiFi.h>
 #include "SoftwareSerial.h"
 #include "Wire.h"
 #include "PJON.h"
@@ -8,6 +9,8 @@
 #include "Adafruit_GFX.h"
 #include "Adafruit_ST7735.h"
 #include "U8g2_for_Adafruit_GFX.h"
+#include <Ubidots.h>
+#include <config.h>
 
 // DEBUG flag
 #define DEBUG
@@ -45,6 +48,8 @@ U8G2_FOR_ADAFRUIT_GFX u8g2;
 // serial port for PJON
 SoftwareSerial port;
 PJON<ThroughSerialAsync> bus(ID);
+Ubidots ubidots((char *)TOKEN, UBI_INDUSTRIAL, UBI_UDP);
+
 // PJON data structure
 struct sensor
 {
@@ -202,7 +207,7 @@ void drawGauge(uint16_t x, uint16_t y, sensor *sensor, cache_entry *cache)
     {
       sprintf(h_string, "%3d%%", h);
     }
-    u8g2.setFont(u8g2_font_helvR14_tf);
+    u8g2.setFont(u8g2_font_helvR14_tr);
     u8g2.drawUTF8(x - u8g2.getUTF8Width(h_string) / 2, y, h_string);
 
     u8g2.setForegroundColor(ST7735_WHITE);
@@ -211,7 +216,7 @@ void drawGauge(uint16_t x, uint16_t y, sensor *sensor, cache_entry *cache)
     {
       sprintf(t_string, "%3.1f°C", t);
     }
-    u8g2.setFont(u8g2_font_helvR08_tf);
+    u8g2.setFont(u8g2_font_helvR08_tr);
     u8g2.drawUTF8(x - u8g2.getUTF8Width(t_string) / 2, y + 12, t_string);
   }
 
@@ -236,35 +241,38 @@ void drawStatus(uint16_t x, uint16_t y, status s, status *last_status)
   status last = *last_status;
   if (last != s)
   {
-    u8g2.setFont(u8g2_font_open_iconic_all_4x_t);
     switch (s)
     {
     case ERROR:
       tft.fillCircle(x, y, 30, RED);
       tft.fillCircle(x, y, 26, ST7735_BLACK);
       tft.drawCircle(x, y, 26, ST7735_WHITE);
+      u8g2.setFont(u8g2_font_open_iconic_thing_4x_t);
       u8g2.setForegroundColor(BLUE);
-      u8g2.drawGlyph(x - 16, y + 16, 152);
+      u8g2.drawGlyph(x - 16, y + 16, 72);
       break;
     case WARN:
       tft.fillCircle(x, y, 30, YELLOW);
       tft.fillCircle(x, y, 26, ST7735_BLACK);
       tft.drawCircle(x, y, 26, ST7735_WHITE);
+      u8g2.setFont(u8g2_font_open_iconic_embedded_4x_t);
       u8g2.setForegroundColor(YELLOW);
-      u8g2.drawGlyph(x - 16, y + 16, 93);
+      u8g2.drawGlyph(x - 16, y + 16, 65);
       break;
     case NORMAL:
       tft.fillCircle(x, y, 30, GREEN);
       tft.fillCircle(x, y, 26, ST7735_BLACK);
       tft.drawCircle(x, y, 26, ST7735_WHITE);
+      u8g2.setFont(u8g2_font_open_iconic_www_4x_t);
       u8g2.setForegroundColor(GREEN);
-      u8g2.drawGlyph(x - 16, y + 16, 268);
+      u8g2.drawGlyph(x - 16, y + 16, 73);
       break;
     case OUTDATED:
       tft.fillCircle(x, y, 30, ST7735_BLACK);
       tft.drawCircle(x, y, 26, ST7735_WHITE);
+      u8g2.setFont(u8g2_font_open_iconic_www_4x_t);
       u8g2.setForegroundColor(ST7735_WHITE);
-      u8g2.drawGlyph(x - 16, y + 16, 87);
+      u8g2.drawGlyph(x - 16, y + 16, 74);
       break;
     default:
       tft.fillCircle(x, y, 30, ST7735_BLACK);
@@ -278,7 +286,7 @@ void drawStatus(uint16_t x, uint16_t y, status s, status *last_status)
 /**
  * Checks record for new status by checking values against configured threshold.
  */
-void checkStatusAndDrawValues(sensor_record record)
+void checkStatusAndDrawValues(sensor_record *record)
 {
   last_time_payload_recieved = millis();
   if (data_cleared)
@@ -289,9 +297,9 @@ void checkStatusAndDrawValues(sensor_record record)
   uint16_t max_humidity = 0;
   for (uint8_t i = 0; i < MAX_WIRES; i++)
   {
-    if (record.sensors[i].humidity > max_humidity)
+    if (record->sensors[i].humidity > max_humidity)
     {
-      max_humidity = record.sensors[i].humidity;
+      max_humidity = record->sensors[i].humidity;
     }
   }
   if (max_humidity > MAX_HUMIDITY * 100 && !error_active)
@@ -319,9 +327,23 @@ void checkStatusAndDrawValues(sensor_record record)
   {
     error_active = false;
   }
-  drawGauge(32, 32, &record.sensors[0], &cache_instance.entries[0]);
-  drawGauge(32, 96, &record.sensors[1], &cache_instance.entries[1]);
-  drawGauge(96, 96, &record.sensors[2], &cache_instance.entries[2]);
+  drawGauge(32, 32, &record->sensors[0], &cache_instance.entries[0]);
+  drawGauge(32, 96, &record->sensors[1], &cache_instance.entries[1]);
+  drawGauge(96, 96, &record->sensors[2], &cache_instance.entries[2]);
+}
+
+/**
+ * Publishes values to ubidots.
+ */
+void submitValues(sensor_record *record)
+{
+  ubidots.add("humidity_0", record->sensors[0].humidity / 100.0);
+  ubidots.add("temperature_0", record->sensors[0].temperature / 100.0);
+  ubidots.add("humidity_1", record->sensors[1].humidity / 100.0);
+  ubidots.add("temperature_1", record->sensors[1].temperature / 100.0);
+  ubidots.add("humidity_2", record->sensors[2].humidity / 100.0);
+  ubidots.add("temperature_2", record->sensors[2].temperature / 100.0);
+  ubidots.send((char *)LABEL);
 }
 
 /**
@@ -331,7 +353,9 @@ void payloadHandler(uint8_t *payload, uint16_t length, const PJON_Packet_Info &p
 {
   memcpy(&record, payload, sizeof(record));
   // handler data
-  checkStatusAndDrawValues(record);
+  checkStatusAndDrawValues(&record);
+  // send data to the cloud
+  submitValues(&record);
 #ifdef DEBUG
   for (uint8_t i = 0; i < MAX_WIRES; i++)
   {
@@ -390,6 +414,7 @@ void setup()
   delay(2000);
 #ifdef DEBUG
   Serial.begin(9600);
+  Serial.setDebugOutput(true);
 #endif
 
   // setup TFT backlight pin
@@ -425,6 +450,55 @@ void setup()
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   // connect to interrupt
   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonPress, CHANGE);
+
+  // init wifi
+  WiFi.mode(WIFI_STA);
+#ifdef DEBUG
+  Serial.printf("Stored SSID: [%s]\n", WiFi.SSID().c_str());
+#endif
+  if (strlen(WiFi.SSID().c_str()) > 0)
+  {
+    WiFi.begin(WiFi.SSID().c_str(), WiFi.psk().c_str());
+  }
+  else
+  {
+    WiFi.begin(DEFAULT_WLAN_SSID, DEFAULT_WLAN_KEY);
+  }
+  uint8_t count = 0;
+  while (WiFi.status() == WL_DISCONNECTED && count < 10)
+  {
+    delay(1000);
+    tft.drawRect(count * 4, 0, 2, 2, ST7735_WHITE);
+    count++;
+  }
+  // reset count
+  tft.drawLine(0, 0, 18, 0, ST7735_BLACK);
+
+  if (WiFi.status() == WL_CONNECTED)
+  {
+    tft.drawRect(0, 0, 4, 4, GREEN);
+  }
+  else
+  {
+    delay(10000);
+    // start wps
+    if (WiFi.beginWPSConfig() && WiFi.SSID().length() > 0)
+    {
+      tft.drawRect(0, 0, 4, 4, GREEN);
+    }
+    else
+    {
+      tft.drawRect(0, 0, 4, 4, RED);
+#ifdef DEBUG
+      Serial.println("WPS failed!");
+#endif
+    }
+  }
+
+  // ubidots init
+#ifdef DEBUG
+  ubidots.setDebug(true);
+#endif
 
 #ifdef DEBUG
   Serial.println("Init complete!");
