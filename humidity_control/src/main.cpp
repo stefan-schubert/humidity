@@ -1,5 +1,7 @@
 #define PJON_PACKET_MAX_LENGTH 100
 
+#include <config.h>
+#include <fonts.h>
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include "SoftwareSerial.h"
@@ -9,11 +11,11 @@
 #include "Adafruit_GFX.h"
 #include "Adafruit_ST7735.h"
 #include "U8g2_for_Adafruit_GFX.h"
-#include <Ubidots.h>
-#include <config.h>
+#include "Adafruit_MQTT.h"
+#include "Adafruit_MQTT_Client.h"
 
 // DEBUG flag
-// #define DEBUG
+#define DEBUG
 
 // pin config
 #define RX_PIN D1
@@ -32,16 +34,23 @@
 #define RED 0xC980
 #define BLUE 0x5E1B
 
+// AIO
+#define AIO_SERVER "io.adafruit.com"
+#define AIO_SERVERPORT 8883
+
 // constants
-const unsigned int MAX_HUMIDITY = 70;            // 70.00%
-const unsigned int WARN_HUMIDITY = 50;           // 50.00 %
-const unsigned long MAX_AGE = 10000;             // 10s
-const unsigned long MAX_AGE_CLOUD = 15000;       // 15s
-const unsigned long DEBOUNCE = 20;               // 20ms
-const unsigned long MAX_DISPLAY_ACTIVE = 600000; // 10min
-const uint8_t MAX_WIRES = 3;                     // max 3 sensor pairs
+const unsigned int MAX_HUMIDITY = 70;             // 70.00%
+const unsigned int WARN_HUMIDITY = 50;            // 50.00 %
+const unsigned long MAX_AGE = 10000;              // 10s
+const unsigned long MAX_AGE_CLOUD = 30000;        // 30s
+const unsigned long DEBOUNCE = 20;                // 20ms
+const unsigned long MAX_DISPLAY_ACTIVE = 600000;  // 10min
+const unsigned long MAX_DISCONNECT_TIME = 600000; // 10min
+const uint8_t MAX_WIRES = 3;                      // max 3 sensor pairs
 const unsigned int WARN_ANGLE = 110 + 320 * ((float)WARN_HUMIDITY / 100.0f);
 const unsigned int ERROR_ANGLE = 110 + 320 * ((float)MAX_HUMIDITY / 100.0f);
+// AIO cert fingerprint
+static const char *fingerprint PROGMEM = "77 00 54 2D DA E7 D8 03 27 31 23 99 EB 27 DB CB A5 4C 57 18";
 
 // display
 Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
@@ -49,7 +58,16 @@ U8G2_FOR_ADAFRUIT_GFX u8g2;
 // serial port for PJON
 SoftwareSerial port;
 PJON<ThroughSerialAsync> bus(ID);
-Ubidots ubidots((char *)TOKEN, UBI_INDUSTRIAL, UBI_UDP);
+// secure wifi connection client
+WiFiClientSecure client;
+// AIO client and feeds
+Adafruit_MQTT_Client mqtt(&client, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, AIO_KEY);
+Adafruit_MQTT_Publish temperature_0 = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/temperature_0");
+Adafruit_MQTT_Publish temperature_1 = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/temperature_1");
+Adafruit_MQTT_Publish temperature_2 = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/temperature_2");
+Adafruit_MQTT_Publish humidity_0 = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/humidity_0");
+Adafruit_MQTT_Publish humidity_1 = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/humidity_1");
+Adafruit_MQTT_Publish humidity_2 = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/humidity_2");
 
 // PJON data structure
 struct sensor
@@ -209,7 +227,7 @@ void drawGauge(uint16_t x, uint16_t y, sensor *sensor, cache_entry *cache)
     {
       sprintf(h_string, "%3d%%", h);
     }
-    u8g2.setFont(u8g2_font_helvR14_tr);
+    u8g2.setFont(dejavu_14);
     u8g2.drawUTF8(x - u8g2.getUTF8Width(h_string) / 2, y, h_string);
 
     u8g2.setForegroundColor(ST7735_WHITE);
@@ -218,7 +236,7 @@ void drawGauge(uint16_t x, uint16_t y, sensor *sensor, cache_entry *cache)
     {
       sprintf(t_string, "%3.1f°C", t);
     }
-    u8g2.setFont(u8g2_font_helvR08_tr);
+    u8g2.setFont(dejavu_8);
     u8g2.drawUTF8(x - u8g2.getUTF8Width(t_string) / 2, y + 12, t_string);
   }
 
@@ -249,32 +267,32 @@ void drawStatus(uint16_t x, uint16_t y, status s, status *last_status)
       tft.fillCircle(x, y, 30, RED);
       tft.fillCircle(x, y, 26, ST7735_BLACK);
       tft.drawCircle(x, y, 26, ST7735_WHITE);
-      u8g2.setFont(u8g2_font_open_iconic_thing_4x_t);
+      u8g2.setFont(open_iconic_symbols_4x);
       u8g2.setForegroundColor(BLUE);
-      u8g2.drawGlyph(x - 16, y + 16, 72);
+      u8g2.drawGlyph(x - 16, y + 16, 67);
       break;
     case WARN:
       tft.fillCircle(x, y, 30, YELLOW);
       tft.fillCircle(x, y, 26, ST7735_BLACK);
       tft.drawCircle(x, y, 26, ST7735_WHITE);
-      u8g2.setFont(u8g2_font_open_iconic_embedded_4x_t);
+      u8g2.setFont(open_iconic_symbols_4x);
       u8g2.setForegroundColor(YELLOW);
-      u8g2.drawGlyph(x - 16, y + 16, 65);
+      u8g2.drawGlyph(x - 13, y + 16, 66);
       break;
     case NORMAL:
       tft.fillCircle(x, y, 30, GREEN);
       tft.fillCircle(x, y, 26, ST7735_BLACK);
       tft.drawCircle(x, y, 26, ST7735_WHITE);
-      u8g2.setFont(u8g2_font_open_iconic_www_4x_t);
+      u8g2.setFont(open_iconic_symbols_4x);
       u8g2.setForegroundColor(GREEN);
-      u8g2.drawGlyph(x - 16, y + 16, 73);
+      u8g2.drawGlyph(x - 16, y + 16, 65);
       break;
     case OUTDATED:
       tft.fillCircle(x, y, 30, ST7735_BLACK);
       tft.drawCircle(x, y, 26, ST7735_WHITE);
-      u8g2.setFont(u8g2_font_open_iconic_www_4x_t);
+      u8g2.setFont(open_iconic_symbols_4x);
       u8g2.setForegroundColor(ST7735_WHITE);
-      u8g2.drawGlyph(x - 16, y + 16, 74);
+      u8g2.drawGlyph(x - 16, y + 16, 64);
       break;
     default:
       tft.fillCircle(x, y, 30, ST7735_BLACK);
@@ -335,21 +353,62 @@ void checkStatusAndDrawValues(sensor_record *record)
 }
 
 /**
+ * Connects MQTT
+ */
+bool connectMQTT()
+{
+  // Stop if already connected.
+  if (mqtt.connected())
+  {
+    return true;
+  }
+
+#ifdef DEBUG
+  Serial.println("Connecting to MQTT... ");
+#endif
+
+  uint8_t result = mqtt.connect();
+  if (result != 0)
+  {
+#ifdef DEBUG
+    Serial.println(mqtt.connectErrorString(result));
+    Serial.println("MQTT not connected!");
+#endif
+    mqtt.disconnect();
+    return false;
+  }
+
+#ifdef DEBUG
+  Serial.println("MQTT connected!");
+#endif
+
+  return true;
+}
+
+/**
  * Publishes values to ubidots.
  */
 void submitValues(sensor_record *record)
 {
   long current_millis = millis();
-  if ((current_millis - last_time_data_submitted) > MAX_AGE_CLOUD)
+  if ((current_millis - last_time_data_submitted) > MAX_AGE_CLOUD && mqtt.connected())
   {
     last_time_data_submitted = current_millis;
-    ubidots.add("humidity_0", record->sensors[0].humidity / 100.0);
-    ubidots.add("temperature_0", record->sensors[0].temperature / 100.0);
-    ubidots.add("humidity_1", record->sensors[1].humidity / 100.0);
-    ubidots.add("temperature_1", record->sensors[1].temperature / 100.0);
-    ubidots.add("humidity_2", record->sensors[2].humidity / 100.0);
-    ubidots.add("temperature_2", record->sensors[2].temperature / 100.0);
-    ubidots.send((char *)LABEL);
+#ifdef DEBUG
+    Serial.println("Submit data!");
+#endif
+    bool result = humidity_0.publish(record->sensors[0].humidity / 100.0);
+    if (result)
+    {
+      humidity_1.publish(record->sensors[1].humidity / 100.0);
+      humidity_2.publish(record->sensors[2].humidity / 100.0);
+      temperature_0.publish(record->sensors[0].temperature / 100.0);
+      temperature_1.publish(record->sensors[1].temperature / 100.0);
+      temperature_2.publish(record->sensors[2].temperature / 100.0);
+    }
+#ifdef DEBUG
+    Serial.printf("Free space: [%d]\n", ESP.getFreeHeap());
+#endif
   }
 }
 
@@ -414,6 +473,52 @@ void ICACHE_RAM_ATTR buttonPress()
 }
 
 /**
+ * Init wifi.
+ */
+bool initWifi()
+{
+  WiFi.mode(WIFI_STA);
+#ifdef DEBUG
+  Serial.printf("Stored SSID: [%s]\n", WiFi.SSID().c_str());
+#endif
+  if (strlen(WiFi.SSID().c_str()) > 0)
+  {
+    WiFi.begin(WiFi.SSID().c_str(), WiFi.psk().c_str());
+  }
+  else
+  {
+    WiFi.begin(DEFAULT_WLAN_SSID, DEFAULT_WLAN_KEY);
+  }
+  uint8_t count = 0;
+  while (WiFi.status() == WL_DISCONNECTED && count < 10)
+  {
+    delay(1000);
+    count++;
+  }
+
+  if (WiFi.status() == WL_CONNECTED)
+  {
+    return true;
+  }
+  else
+  {
+    delay(10000);
+    // start wps
+    if (WiFi.beginWPSConfig() && WiFi.SSID().length() > 0)
+    {
+      return true;
+    }
+    else
+    {
+      return false;
+#ifdef DEBUG
+      Serial.println("WPS failed!");
+#endif
+    }
+  }
+}
+
+/**
  * Setup system.
  */
 void setup()
@@ -423,6 +528,15 @@ void setup()
   Serial.begin(9600);
   Serial.setDebugOutput(true);
 #endif
+
+  // init wifi
+  bool connection_status = initWifi();
+  if (connection_status)
+  {
+    // aio init
+    client.setFingerprint(fingerprint);
+    connectMQTT();
+  }
 
   // setup TFT backlight pin
   pinMode(TFT_LED, OUTPUT);
@@ -435,6 +549,9 @@ void setup()
   u8g2.setForegroundColor(ST7735_WHITE);
   tft.setRotation(tft.getRotation() + 1);
   tft.fillScreen(ST7735_BLACK);
+
+  // set connection status
+  tft.fillRect(0, 0, 4, 4, connection_status ? GREEN : RED);
 
   // draw status and gauges
   drawStatus(96, 32, NONE, &last_status);
@@ -457,55 +574,6 @@ void setup()
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   // connect to interrupt
   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonPress, CHANGE);
-
-  // init wifi
-  WiFi.mode(WIFI_STA);
-#ifdef DEBUG
-  Serial.printf("Stored SSID: [%s]\n", WiFi.SSID().c_str());
-#endif
-  if (strlen(WiFi.SSID().c_str()) > 0)
-  {
-    WiFi.begin(WiFi.SSID().c_str(), WiFi.psk().c_str());
-  }
-  else
-  {
-    WiFi.begin(DEFAULT_WLAN_SSID, DEFAULT_WLAN_KEY);
-  }
-  uint8_t count = 0;
-  while (WiFi.status() == WL_DISCONNECTED && count < 10)
-  {
-    delay(1000);
-    tft.fillRect(count * 4, 0, 2, 2, ST7735_WHITE);
-    count++;
-  }
-  // reset count
-  tft.fillRect(0, 0, 18, 2, ST7735_BLACK);
-
-  if (WiFi.status() == WL_CONNECTED)
-  {
-    tft.fillRect(0, 0, 4, 4, GREEN);
-  }
-  else
-  {
-    delay(10000);
-    // start wps
-    if (WiFi.beginWPSConfig() && WiFi.SSID().length() > 0)
-    {
-      tft.fillRect(0, 0, 4, 4, GREEN);
-    }
-    else
-    {
-      tft.fillRect(0, 0, 4, 4, RED);
-#ifdef DEBUG
-      Serial.println("WPS failed!");
-#endif
-    }
-  }
-
-  // ubidots init
-#ifdef DEBUG
-  ubidots.setDebug(true);
-#endif
 
 #ifdef DEBUG
   Serial.println("Init complete!");
@@ -542,5 +610,17 @@ void loop()
   if (!error_active && display_active && (current_millis - last_time_display_active) > MAX_DISPLAY_ACTIVE)
   {
     toggleDisplay(false);
+  }
+
+  // restart machine, if we are not connected
+  if ((current_millis - last_time_data_submitted) > MAX_DISCONNECT_TIME)
+  {
+    WiFi.forceSleepBegin();
+    wdt_reset();
+    ESP.restart();
+    while (1)
+    {
+      wdt_reset();
+    }
   }
 }
