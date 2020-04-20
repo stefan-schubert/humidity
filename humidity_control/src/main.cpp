@@ -11,11 +11,10 @@
 #include "Adafruit_GFX.h"
 #include "Adafruit_ST7735.h"
 #include "U8g2_for_Adafruit_GFX.h"
-#include "Adafruit_MQTT.h"
-#include "Adafruit_MQTT_Client.h"
+#include "PubSubClient.h"
 
 // DEBUG flag
-#define DEBUG
+// #define DEBUG
 
 // pin config
 #define RX_PIN D1
@@ -35,22 +34,22 @@
 #define BLUE 0x5E1B
 
 // AIO
-#define AIO_SERVER "io.adafruit.com"
-#define AIO_SERVERPORT 8883
+#define SERVER "industrial.api.ubidots.com"
+#define SERVER_PORT 8883
 
 // constants
 const unsigned int MAX_HUMIDITY = 70;             // 70.00%
 const unsigned int WARN_HUMIDITY = 50;            // 50.00 %
 const unsigned long MAX_AGE = 10000;              // 10s
-const unsigned long MAX_AGE_CLOUD = 30000;        // 30s
+const unsigned long MAX_AGE_CLOUD = 300000;       // 5min
 const unsigned long DEBOUNCE = 20;                // 20ms
 const unsigned long MAX_DISPLAY_ACTIVE = 600000;  // 10min
 const unsigned long MAX_DISCONNECT_TIME = 600000; // 10min
 const uint8_t MAX_WIRES = 3;                      // max 3 sensor pairs
 const unsigned int WARN_ANGLE = 110 + 320 * ((float)WARN_HUMIDITY / 100.0f);
 const unsigned int ERROR_ANGLE = 110 + 320 * ((float)MAX_HUMIDITY / 100.0f);
-// AIO cert fingerprint
-static const char *fingerprint PROGMEM = "77 00 54 2D DA E7 D8 03 27 31 23 99 EB 27 DB CB A5 4C 57 18";
+// cert fingerprint
+static const char *fingerprint PROGMEM = "ad 9c 91 38 c7 65 34 a5 25 0e 85 82 06 5c a3 d1 49 87 88 46";
 
 // display
 Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
@@ -60,14 +59,8 @@ SoftwareSerial port;
 PJON<ThroughSerialAsync> bus(ID);
 // secure wifi connection client
 WiFiClientSecure client;
-// AIO client and feeds
-Adafruit_MQTT_Client mqtt(&client, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, AIO_KEY);
-Adafruit_MQTT_Publish temperature_0 = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/temperature_0");
-Adafruit_MQTT_Publish temperature_1 = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/temperature_1");
-Adafruit_MQTT_Publish temperature_2 = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/temperature_2");
-Adafruit_MQTT_Publish humidity_0 = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/humidity_0");
-Adafruit_MQTT_Publish humidity_1 = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/humidity_1");
-Adafruit_MQTT_Publish humidity_2 = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/humidity_2");
+// client
+PubSubClient mqtt(SERVER, SERVER_PORT, client);
 
 // PJON data structure
 struct sensor
@@ -367,11 +360,11 @@ bool connectMQTT()
   Serial.println("Connecting to MQTT... ");
 #endif
 
-  uint8_t result = mqtt.connect();
-  if (result != 0)
+  bool result = mqtt.connect("humidity_device", TOKEN, "");
+  if (!result)
   {
 #ifdef DEBUG
-    Serial.println(mqtt.connectErrorString(result));
+    Serial.println(mqtt.state());
     Serial.println("MQTT not connected!");
 #endif
     mqtt.disconnect();
@@ -386,30 +379,53 @@ bool connectMQTT()
 }
 
 /**
- * Publishes values to ubidots.
+ * Publishes data.
+ */
+bool publish(const char label[], double value)
+{
+  // build topic and payload
+  char valueStr[6];
+  dtostrf(value, 4, 2, valueStr);
+  char payload[50];
+  sprintf(payload, "{\"%s\":%s}", label, valueStr);
+#ifdef DEBUG
+  Serial.println(payload);
+#endif
+  // publish data
+  return mqtt.publish(TOPIC, payload);
+}
+
+/**
+ * Submits values to mqtt broker.
  */
 void submitValues(sensor_record *record)
 {
   long current_millis = millis();
-  if ((current_millis - last_time_data_submitted) > MAX_AGE_CLOUD && mqtt.connected())
+  if ((current_millis - last_time_data_submitted) > MAX_AGE_CLOUD && mqtt.connected() && mqtt.state() == MQTT_CONNECTED)
   {
     last_time_data_submitted = current_millis;
 #ifdef DEBUG
     Serial.println("Submit data!");
 #endif
-    bool result = humidity_0.publish(record->sensors[0].humidity / 100.0);
-    if (result)
-    {
-      humidity_1.publish(record->sensors[1].humidity / 100.0);
-      humidity_2.publish(record->sensors[2].humidity / 100.0);
-      temperature_0.publish(record->sensors[0].temperature / 100.0);
-      temperature_1.publish(record->sensors[1].temperature / 100.0);
-      temperature_2.publish(record->sensors[2].temperature / 100.0);
-    }
+
+    // build topic and payload
+    char payload[50];
+    sprintf(payload, "{\"h0\":%3.2f,\"h1\":%3.2f,\"h2\":%3.2f,\"t0\":%3.2f,\"t1\":%3.2f,\"t2\":%3.2f}", record->sensors[0].humidity / 100.0, record->sensors[1].humidity / 100.0, record->sensors[2].humidity / 100.0, record->sensors[0].temperature / 100.0, record->sensors[1].temperature / 100.0, record->sensors[2].temperature / 100.0);
+#ifdef DEBUG
+    Serial.println(payload);
+#endif
+    // publish data
+    mqtt.publish(TOPIC, payload);
 #ifdef DEBUG
     Serial.printf("Free space: [%d]\n", ESP.getFreeHeap());
 #endif
   }
+#ifdef DEBUG
+  if (mqtt.state() != MQTT_CONNECTED)
+  {
+    Serial.println("MQTT Connection lost!");
+  }
+#endif
 }
 
 /**
@@ -490,9 +506,9 @@ bool initWifi()
     WiFi.begin(DEFAULT_WLAN_SSID, DEFAULT_WLAN_KEY);
   }
   uint8_t count = 0;
-  while (WiFi.status() == WL_DISCONNECTED && count < 10)
+  while (WiFi.status() != WL_CONNECTED && count < 10)
   {
-    delay(1000);
+    delay(500);
     count++;
   }
 
@@ -529,15 +545,6 @@ void setup()
   Serial.setDebugOutput(true);
 #endif
 
-  // init wifi
-  bool connection_status = initWifi();
-  if (connection_status)
-  {
-    // aio init
-    client.setFingerprint(fingerprint);
-    connectMQTT();
-  }
-
   // setup TFT backlight pin
   pinMode(TFT_LED, OUTPUT);
   digitalWrite(TFT_LED, HIGH);
@@ -550,9 +557,6 @@ void setup()
   tft.setRotation(tft.getRotation() + 1);
   tft.fillScreen(ST7735_BLACK);
 
-  // set connection status
-  tft.fillRect(0, 0, 4, 4, connection_status ? GREEN : RED);
-
   // draw status and gauges
   drawStatus(96, 32, NONE, &last_status);
   drawGauge(32, 32, &record.sensors[0], &cache_instance.entries[0]);
@@ -560,7 +564,7 @@ void setup()
   drawGauge(96, 96, &record.sensors[0], &cache_instance.entries[2]);
 
   // start software serial port
-  port.begin(9600, SWSERIAL_8N1, RX_PIN, TX_PIN, false, 256);
+  port.begin(9600, SWSERIAL_8N1, RX_PIN, TX_PIN, false);
 
   // setup PJON
   bus.strategy.set_serial(&port);
@@ -575,6 +579,17 @@ void setup()
   // connect to interrupt
   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonPress, CHANGE);
 
+  // init wifi
+  bool connection_status = initWifi();
+  if (connection_status)
+  {
+    // set connection status
+    tft.fillRect(0, 0, 4, 4, connection_status ? GREEN : RED);
+    // aio init
+    client.setFingerprint(fingerprint);
+    connectMQTT();
+  }
+
 #ifdef DEBUG
   Serial.println("Init complete!");
 #endif
@@ -588,6 +603,8 @@ void loop()
   // trigger PJON handlers
   bus.update();
   bus.receive();
+  // trigger mqtt handlers
+  mqtt.loop();
 
   unsigned long current_millis = millis();
   // turn on display and show cleared status if no new data has been received
@@ -612,8 +629,25 @@ void loop()
     toggleDisplay(false);
   }
 
+  // check connection status
+  if (!mqtt.connected())
+  {
+    if (WiFi.status() == WL_CONNECTED)
+    {
+      // set connection status
+      tft.fillRect(0, 0, 4, 4, GREEN);
+      // connect to mqtt broker
+      connectMQTT();
+    }
+    else
+    {
+      // set connection status
+      tft.fillRect(0, 0, 4, 4, RED);
+    }
+  }
+
   // restart machine, if we are not connected
-  if ((current_millis - last_time_data_submitted) > MAX_DISCONNECT_TIME)
+  if (WiFi.status() != WL_CONNECTED && (current_millis - last_time_data_submitted) > MAX_DISCONNECT_TIME)
   {
     WiFi.forceSleepBegin();
     wdt_reset();
