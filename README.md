@@ -3,6 +3,9 @@
 This project is built using [platformio.org](https://platformio.org).
 
 ## Wiring
+
+Sensor unit and control unit are connect through RS485 (A+, B+, GND connected with a cat. 5 patch cable wires).
+
 ### Sensor Unit
 
 ![Sensor Unit](sensor_unit.png)
@@ -44,7 +47,7 @@ __Hardware Components__
   * [Adafruit-ST7735-Library](https://github.com/adafruit/Adafruit-ST7735-Library/)
   * [U8g2_for_Adafruit_GFX](https://github.com/olikraus/U8g2_for_Adafruit_GFX)
     * [generate fonts](https://github.com/olikraus/u8g2/blob/master/doc/faq.txt#L179)
-    * [generate icons]()
+    * [generate icons](https://github.com/olikraus/u8g2/blob/master/tools/font/png2bdf/test/do_iconic.sh)
   * Examples
     * [Shield](https://github.com/wemos/D1_mini_Examples/tree/master/examples/04.Shields/TFT_1.4_Shield)
     * [Generate Colors](http://www.barth-dev.de/online/rgb565-color-picker/)
@@ -57,4 +60,5 @@ __Hardware Components__
     * no special library needed
     * Tutorial: [[1](https://hikro.de/arduino-taster-als-schalter-programmieren)] [[2](https://www.arduino.cc/reference/en/language/functions/external-interrupts/attachinterrupt/)]
 
-## Used Contents
+## Other sources
+* [Fritzing parts](https://github.com/Warlib1975/Fritzing-parts)
