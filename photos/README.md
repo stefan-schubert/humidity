@@ -20,6 +20,8 @@
 
 ![control_unit](control_unit.jpg)
 
+![control_unit_display_on](control_unit_display_on.jpg)
+
 ![control_unit_back](control_unit_back.jpg)
 
 ![control_unit_inner](control_unit_inner.jpg)
