@@ -1,6 +1,6 @@
 # Humidity Monitoring Solution
 
-This project is built using [platformio.org](https://platformio.org).
+The intention of the project is to monitor a ceiling cavity for critical humidity. This ceiling cavity is far away from any wlan hotspot. For that reason the system is divided in two units connected with RS485. The communication protocol used on top of RS485 is [PJON](https://www.pjon.org/). The sensor unit has a connection to 3 sensor pairs through I2C bus. The control unit has a buzzer, a display and a button. If humidity is to high the buzzer is activated until a normal value is reached again. The button deactivates the buzzer in the case of an error or enables or disables the display. The dispalay is automatically disabled after 10 minutes inactivity. For historical data recording and alerting the sensor data is submitted to [ubidots](https://ubidots.com/) through a MQTT connection connected over a wlan access point.
 
 ## Wiring
 
@@ -54,7 +54,7 @@ __Hardware Components__
 * RS485
   * no special library needed
   * Tutorials: [[1](https://maker.pro/arduino/tutorial/creating-long-distance-serial-communication-using-an-arduino-and-an-rs-485-module)] [[2](https://create.arduino.cc/projecthub/philippedc/arduino-esp8266-rs485-modbus-anemometer-45f1d8)] [[3](https://www.hackster.io/philippedc/arduino-esp8266-rs485-modbus-anemometer-45f1d8)] [[4](https://microcontrollerelectronics.com/sn75176-rs485-communications-between-two-arduinos/)] [[5](https://arduinoinfo.mywikis.net/wiki/SoftwareSerialRS485Example)]
-  * __IMPORTANT: Transport Protocol [PJON](https://www.pjon.org) ([Github](https://github.com/gioblu/PJON))__
+  * [PJON](https://www.pjon.org) ([Github](https://github.com/gioblu/PJON)) as network protocol
     * Examples: [[1](https://github.com/gioblu/PJON/tree/master/src/strategies/ThroughSerialAsync)] [[2](https://www.pjon.org/data-reception.php)]
 * Button
     * no special library needed
