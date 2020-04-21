@@ -2,6 +2,8 @@
 
 The intention of the project is to monitor a ceiling cavity for critical humidity. This ceiling cavity is far away from any wlan hotspot. For that reason the system is divided in two units connected with RS485. The communication protocol used on top of RS485 is [PJON](https://www.pjon.org/). The sensor unit has a connection to 3 sensor pairs through I2C bus. The control unit has a buzzer, a display and a button. If humidity is to high the buzzer is activated until a normal value is reached again. The button deactivates the buzzer in the case of an error or enables or disables the display. The dispalay is automatically disabled after 10 minutes inactivity. For historical data recording and alerting the sensor data is submitted to [ubidots](https://ubidots.com/) through a MQTT connection connected over a wlan access point.
 
+Take a look at the [photos](photos/)!
+
 ## Wiring
 
 Sensor unit and control unit are connect through RS485 (A+, B+, GND connected with a cat. 5 patch cable wires).
