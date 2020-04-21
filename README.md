@@ -1,6 +1,6 @@
 # Humidity Monitoring Solution
 
-This project is build using [platformio.org](https://platformio.org).
+This project is built using [platformio.org](https://platformio.org).
 
 ## Wiring
 ### Sensor Unit
@@ -17,10 +17,13 @@ __Hardware Components__
 
 ### Control Unit
 
+![Control Unit](control_unit.png)
+
 __Hardware Components__
 * [WEMOS D1 mini](https://www.wemos.cc/en/latest/d1/d1_mini.html)
-* [WEMOS TFT 14. Shield](https://www.wemos.cc/en/latest/d1_mini_shiled/tft_1_4.html)
+* [WEMOS TFT 1.4 Shield](https://www.wemos.cc/en/latest/d1_mini_shiled/tft_1_4.html)
 * [WEMOS Buzzer Shield](https://www.wemos.cc/en/latest/d1_mini_shiled/buzzer.html)
+* [TTL RS485 Adapter](https://www.makershop.de/module/kommunikation-module/ttl-rs485-adapter/)
 
 ## Libraries
 * WEMOS D1 mini (ESP8266)
