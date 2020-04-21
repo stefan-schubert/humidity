@@ -5,6 +5,8 @@ This project is build using [platformio.org](https://platformio.org).
 ## Wiring
 ### Sensor Unit
 
+![Sensor Unit](sensor_unit.png)
+
 __Hardware Components__
 * [Wemos D1 mini](https://www.wemos.cc/en/latest/d1/d1_mini.html)
 * [TCA9548A 8-Channel I2C Switch](http://www.ti.com/lit/ds/symlink/tca9548a.pdf)
