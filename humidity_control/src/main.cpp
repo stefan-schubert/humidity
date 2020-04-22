@@ -410,12 +410,26 @@ void submitValues(sensor_record *record)
 
     // build topic and payload
     char payload[50];
-    sprintf(payload, "{\"h0\":%3.2f,\"h1\":%3.2f,\"h2\":%3.2f,\"t0\":%3.2f,\"t1\":%3.2f,\"t2\":%3.2f}", record->sensors[0].humidity / 100.0, record->sensors[1].humidity / 100.0, record->sensors[2].humidity / 100.0, record->sensors[0].temperature / 100.0, record->sensors[1].temperature / 100.0, record->sensors[2].temperature / 100.0);
+    char *payload_ptr = payload;
+    bool has_payload = false;
+    for (uint8_t i = 0; i < MAX_WIRES; i++)
+    {
+      if (record->sensors[i].connected_0 || record->sensors[i].connected_1)
+      {
+        payload_ptr += sprintf(payload_ptr, "%s\"h%d\":%3.2f,\"t%d\":%3.2f", has_payload ? "," : "", i, record->sensors[i].humidity / 100.0, i, record->sensors[i].temperature / 100.0);
+        has_payload = true;
+      }
+    }
+    if (has_payload)
+    {
+      char wrapped[50];
+      sprintf(wrapped, "{%s}", payload);
 #ifdef DEBUG
-    Serial.println(payload);
+      Serial.println(wrapped);
 #endif
-    // publish data
-    mqtt.publish(TOPIC, payload);
+      // publish data
+      mqtt.publish(TOPIC, wrapped);
+    }
 #ifdef DEBUG
     Serial.printf("Free space: [%d]\n", ESP.getFreeHeap());
 #endif
