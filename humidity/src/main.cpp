@@ -1,4 +1,4 @@
-#define PJON_PACKET_MAX_LENGTH 100
+#define PJON_PACKET_MAX_LENGTH 32
 
 #include <Arduino.h>
 #include "brzo_i2c.h"
@@ -7,7 +7,7 @@
 #include "PJON.h"
 
 // DEBUG flag
-#define NO_DEBUG
+// #define DEBUG
 
 // pin config
 #define SDA D2
@@ -22,7 +22,7 @@
 
 // constants
 // check interval to read sensor values
-const unsigned long CHECK_INTERVAL = 5000;
+const unsigned long CHECK_INTERVAL = 10000; // 10s
 // max sensor wires connected to multiplexer
 // each wire has 2 sensors
 const uint8_t MAX_WIRES = 3;

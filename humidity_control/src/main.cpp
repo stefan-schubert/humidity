@@ -1,4 +1,4 @@
-#define PJON_PACKET_MAX_LENGTH 100
+#define PJON_PACKET_MAX_LENGTH 32
 
 #include <config.h>
 #include <fonts.h>
@@ -40,7 +40,7 @@
 // constants
 const unsigned int MAX_HUMIDITY = 70;             // 70.00%
 const unsigned int WARN_HUMIDITY = 50;            // 50.00 %
-const unsigned long MAX_AGE = 10000;              // 10s
+const unsigned long MAX_AGE = 60000;              // 1min
 const unsigned long MAX_AGE_CLOUD = 300000;       // 5min
 const unsigned long DEBOUNCE = 20;                // 20ms
 const unsigned long MAX_DISPLAY_ACTIVE = 600000;  // 10min
