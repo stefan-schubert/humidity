@@ -44,7 +44,7 @@ __Hardware Components__
 * BME280 through I2C
     * [BME](https://github.com/finitespace/BME280)
     * [I2C](https://github.com/pasko-zh/brzo_i2c) (Fast Software BitBang written in assembly!)
-        * [Interesting infos about I2C](https://www.i2c-bus.org/i2c-primer/analysing-obscure-problems/blocked-bus/)
+        * [Interesting facts about I2C](https://www.i2c-bus.org/i2c-primer/analysing-obscure-problems/blocked-bus/)
 * TFT
   * [Adafruit-ST7735-Library](https://github.com/adafruit/Adafruit-ST7735-Library/)
   * [U8g2_for_Adafruit_GFX](https://github.com/olikraus/U8g2_for_Adafruit_GFX)
