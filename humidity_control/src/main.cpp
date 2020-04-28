@@ -272,7 +272,7 @@ void drawStatus(uint16_t x, uint16_t y, status s, status *last_status)
       tft.drawCircle(x, y, 26, ST7735_WHITE);
       u8g2.setFont(open_iconic_symbols_4x);
       u8g2.setForegroundColor(YELLOW);
-      u8g2.drawGlyph(x - 13, y + 16, 66);
+      u8g2.drawGlyph(x - 14, y + 14, 66);
       break;
     case NORMAL:
       tft.fillCircle(x, y, 30, GREEN);
