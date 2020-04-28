@@ -185,7 +185,7 @@ void setup()
   bme_1.setSettings(settings_bme_1);
 
   // start software serial port
-  port.begin(9600, SWSERIAL_8N1, RX_PIN, TX_PIN, false, 256);
+  port.begin(9600, SWSERIAL_8N1, RX_PIN, TX_PIN, false);
 
   // setup PJON with serial port
   bus.strategy.set_serial(&port);

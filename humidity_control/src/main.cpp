@@ -38,14 +38,15 @@
 #define SERVER_PORT 8883
 
 // constants
-const unsigned int MAX_HUMIDITY = 70;             // 70.00%
-const unsigned int WARN_HUMIDITY = 50;            // 50.00 %
-const unsigned long MAX_AGE = 60000;              // 1min
-const unsigned long MAX_AGE_CLOUD = 300000;       // 5min
-const unsigned long DEBOUNCE = 20;                // 20ms
-const unsigned long MAX_DISPLAY_ACTIVE = 600000;  // 10min
-const unsigned long MAX_DISCONNECT_TIME = 600000; // 10min
-const uint8_t MAX_WIRES = 3;                      // max 3 sensor pairs
+const unsigned int MAX_HUMIDITY = 70;                  // 70.00%
+const unsigned int WARN_HUMIDITY = 50;                 // 50.00 %
+const unsigned long MAX_AGE = 60000;                   // 1min
+const unsigned long MAX_AGE_CLOUD = 300000;            // 5min
+const unsigned long DEBOUNCE = 20;                     // 20ms
+const unsigned long MAX_DISPLAY_ACTIVE = 600000;       // 10min
+const unsigned long MAX_DISCONNECT_TIME = 600000;      // 10min
+const unsigned long MAX_MQTT_DISCONNECT_TIME = 300000; // 5min
+const uint8_t MAX_WIRES = 3;                           // max 3 sensor pairs
 const unsigned int WARN_ANGLE = 110 + 320 * ((float)WARN_HUMIDITY / 100.0f);
 const unsigned int ERROR_ANGLE = 110 + 320 * ((float)MAX_HUMIDITY / 100.0f);
 // cert fingerprint
@@ -102,6 +103,7 @@ unsigned long last_time_button_pressed = millis();
 unsigned long last_time_payload_recieved = millis();
 unsigned long last_time_display_active = millis();
 unsigned long last_time_data_submitted = millis();
+unsigned long last_time_tried_to_reconnect = millis();
 // falgs
 volatile bool data_cleared = false;
 volatile bool buttonPressed = false;
@@ -368,6 +370,8 @@ bool connectMQTT()
     Serial.println("MQTT not connected!");
 #endif
     mqtt.disconnect();
+    // set connection status
+    tft.fillRect(0, 0, 4, 4, YELLOW);
     return false;
   }
 
@@ -375,24 +379,9 @@ bool connectMQTT()
   Serial.println("MQTT connected!");
 #endif
 
+  // set connection status
+  tft.fillRect(0, 0, 4, 4, GREEN);
   return true;
-}
-
-/**
- * Publishes data.
- */
-bool publish(const char label[], double value)
-{
-  // build topic and payload
-  char valueStr[6];
-  dtostrf(value, 4, 2, valueStr);
-  char payload[50];
-  sprintf(payload, "{\"%s\":%s}", label, valueStr);
-#ifdef DEBUG
-  Serial.println(payload);
-#endif
-  // publish data
-  return mqtt.publish(TOPIC, payload);
 }
 
 /**
@@ -595,10 +584,10 @@ void setup()
 
   // init wifi
   bool connection_status = initWifi();
+  // set connection status
+  tft.fillRect(0, 0, 4, 4, connection_status ? GREEN : RED);
   if (connection_status)
   {
-    // set connection status
-    tft.fillRect(0, 0, 4, 4, connection_status ? GREEN : RED);
     // aio init
     client.setFingerprint(fingerprint);
     connectMQTT();
@@ -648,10 +637,12 @@ void loop()
   {
     if (WiFi.status() == WL_CONNECTED)
     {
-      // set connection status
-      tft.fillRect(0, 0, 4, 4, GREEN);
       // connect to mqtt broker
-      connectMQTT();
+      if ((current_millis - last_time_tried_to_reconnect) > MAX_MQTT_DISCONNECT_TIME)
+      {
+        last_time_tried_to_reconnect = current_millis;
+        connectMQTT();
+      }
     }
     else
     {
