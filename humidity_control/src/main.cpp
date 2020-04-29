@@ -597,9 +597,6 @@ void setup()
     x509.append(ca1);
     x509.append(ca2);
     client.setTrustAnchors(&x509);
-#ifdef DEBUG
-    Serial.printf("Free space: [%d]\n", ESP.getFreeHeap());
-#endif
     connectMQTT();
   }
 
@@ -651,9 +648,6 @@ void loop()
       if ((current_millis - last_time_tried_to_reconnect) > MAX_MQTT_DISCONNECT_TIME)
       {
         last_time_tried_to_reconnect = current_millis;
-#ifdef DEBUG
-        Serial.printf("Free space: [%d]\n", ESP.getFreeHeap());
-#endif
         if (connectMQTT())
         {
           last_time_tried_to_reconnect = 0;
