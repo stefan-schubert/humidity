@@ -654,7 +654,10 @@ void loop()
 #ifdef DEBUG
         Serial.printf("Free space: [%d]\n", ESP.getFreeHeap());
 #endif
-        connectMQTT();
+        if (connectMQTT())
+        {
+          last_time_tried_to_reconnect = 0;
+        }
       }
       else
       {
