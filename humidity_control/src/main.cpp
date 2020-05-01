@@ -107,12 +107,13 @@ unsigned long last_time_payload_recieved = millis();
 unsigned long last_time_display_active = millis();
 unsigned long last_time_data_submitted = millis();
 unsigned long last_time_tried_to_reconnect = 0;
-// falgs
+// flags
 volatile bool data_cleared = false;
 volatile bool buttonPressed = false;
 volatile bool buzzer_active = false;
 volatile bool error_active = false;
 volatile bool display_active = true;
+bool initial_connection_status = false;
 // status
 status last_status = INIT;
 // record
@@ -393,7 +394,7 @@ bool connectMQTT()
 void submitValues(sensor_record *record)
 {
   long current_millis = millis();
-  if ((current_millis - last_time_data_submitted) > MAX_AGE_CLOUD && mqtt.connected() && mqtt.state() == MQTT_CONNECTED)
+  if (initial_connection_status && (current_millis - last_time_data_submitted) > MAX_AGE_CLOUD && mqtt.connected() && mqtt.state() == MQTT_CONNECTED)
   {
     last_time_data_submitted = current_millis;
 #ifdef DEBUG
@@ -586,10 +587,10 @@ void setup()
   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonPress, CHANGE);
 
   // init wifi
-  bool connection_status = initWifi();
+  initial_connection_status = initWifi();
   // set connection status
-  tft.fillRect(0, 0, 4, 4, connection_status ? GREEN : RED);
-  if (connection_status)
+  tft.fillRect(0, 0, 4, 4, initial_connection_status ? GREEN : RED);
+  if (initial_connection_status)
   {
     // init mqtt
     configTime(1 * 3600, 0, "de.pool.ntp.org");
@@ -614,7 +615,10 @@ void loop()
   bus.update();
   bus.receive();
   // trigger mqtt handlers
-  mqtt.loop();
+  if (initial_connection_status)
+  {
+    mqtt.loop();
+  }
 
   unsigned long current_millis = millis();
   // turn on display and show cleared status if no new data has been received
@@ -640,7 +644,7 @@ void loop()
   }
 
   // check connection status
-  if (!mqtt.connected())
+  if (initial_connection_status && !mqtt.connected())
   {
     if (WiFi.status() == WL_CONNECTED)
     {
@@ -667,7 +671,7 @@ void loop()
   }
 
   // restart machine, if we are not connected
-  if (WiFi.status() != WL_CONNECTED && (current_millis - last_time_data_submitted) > MAX_DISCONNECT_TIME)
+  if (initial_connection_status && WiFi.status() != WL_CONNECTED && (current_millis - last_time_data_submitted) > MAX_DISCONNECT_TIME)
   {
     WiFi.forceSleepBegin();
     wdt_reset();
